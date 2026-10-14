@@ -1,14 +1,19 @@
-import asyncio, json, threading, zipfile, io
+import asyncio, json, threading, zipfile, io, uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .pipeline import Job, OUT
+from .recap import RecapJob, UPLOADS, VOICES, LENGTH_TARGETS
 from . import brain, watch, youtube_upload as yt
 
-JOBS: dict[str, Job] = {}
+JOBS: dict[str, object] = {}
+
+def uuid_hex():
+    return uuid.uuid4().hex[:10]
+
 WEB = Path(__file__).resolve().parent.parent / "web"
 OUT.mkdir(exist_ok=True)
 
@@ -102,6 +107,59 @@ def zip_all(jid: str):
     buf.seek(0)
     return StreamingResponse(buf, media_type="application/zip",
                              headers={"Content-Disposition": f"attachment; filename=offcut-{jid}.zip"})
+
+
+
+class RecapReq(BaseModel):
+    source: str
+    length: int = 1          # 1=60s Shorts, or 5/8/12 minutes
+    fmt: str = "9:16"        # 9:16 or 16:9
+    voice: str = "en-US-AndrewNeural"
+    spoilers: bool = False
+    captions: bool = True
+
+
+@app.get("/api/recap/options")
+def recap_options():
+    return {
+        "voices": VOICES,
+        "lengths": [
+            {"id": 1, "label": "Shorts 60s"},
+            {"id": 5, "label": "5 min"},
+            {"id": 8, "label": "8 min"},
+            {"id": 12, "label": "12 min"},
+        ],
+        "formats": ["9:16", "16:9"],
+    }
+
+
+@app.post("/api/upload-file")
+async def upload_file(file: UploadFile = File(...)):
+    UPLOADS.mkdir(parents=True, exist_ok=True)
+    safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in (file.filename or "video.mp4"))
+    dest = UPLOADS / f"{uuid_hex()}_{safe}"
+    with dest.open("wb") as f:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
+    return {"path": str(dest), "name": file.filename, "size": dest.stat().st_size}
+
+
+@app.post("/api/recap")
+def recap(req: RecapReq):
+    job = RecapJob(
+        req.source.strip(),
+        length=req.length,
+        fmt=req.fmt,
+        voice=req.voice,
+        spoilers=req.spoilers,
+        captions_on=req.captions,
+    )
+    JOBS[job.id] = job
+    threading.Thread(target=job.run, daemon=True).start()
+    return {"id": job.id}
 
 
 # ── Channel watch ──────────────────────────────────────────────

@@ -45,3 +45,10 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px}.btns{displ
 .watch-list b{display:block}
 .mini{width:56px;background:var(--panel);border:1px solid var(--line);color:var(--fg);padding:4px 6px;border-radius:3px;font:12px var(--mono)}
 #uploadBtn:disabled{opacity:.5;cursor:wait}
+
+.tabs{display:flex;gap:8px;margin-bottom:28px}
+.tab{font:12px var(--mono);letter-spacing:.1em;background:none;color:var(--dim);border:1px solid var(--line);padding:8px 16px;border-radius:99px;cursor:pointer}
+.tab.on{color:#111;background:var(--fg);border-color:var(--fg)}
+#recapPane .note code{color:var(--gold)}
+select.mini{background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:3px;font:12px var(--mono)}
+video.landscape{aspect-ratio:16/9}

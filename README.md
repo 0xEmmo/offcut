@@ -7,9 +7,10 @@ Paste a YouTube link or a local file. offcut transcribes it, picks the strongest
 bold word-by-word captions (white, with emphasis words in yellow). Every clip
 gets an **Audit** score and post copy you can paste straight into TikTok / Reels / Shorts.
 
-**New in v0.2:**
+**New in v0.3:**
+- **RECAP** — upload a film → original commentary voiceover + short supporting clips (16:9 or Shorts)
 - **WATCH** — follow YouTube channels; new uploads are clipped automatically
-- **UPLOAD** — push a clip to YouTube Shorts (private by default) with one click
+- **UPLOAD** — push a clip (or recap) to YouTube Shorts (private by default) with one click
 
 ![input](docs/input.png)
 ![processing](docs/processing.png)
@@ -34,6 +35,30 @@ Headless, from the terminal:
 ```
 
 Output lands in `out/<job-id>/`: `clip_01.mp4`, `clip_01.srt`, a thumbnail and `job.json` with scores and copy.
+
+
+## Recap mode
+
+Switch to the **RECAP** tab. Upload a movie file (stored in `data/uploads/`), pick length
+(60s Shorts, or 5 / 8 / 12 min), format (9:16 or 16:9), and a voice. offcut will:
+
+1. Transcribe with faster-whisper and detect scene cuts
+2. Ask Gemini for an **original commentary / review-style** script (not a scene-by-scene dump), with a short 2–6s supporting clip per line. Ending spoilers stay off unless you toggle them on
+3. Narrate with free `edge-tts`
+4. Assemble: title card, chapter cards, interleaved clips, burned word-by-word captions, narration as the main audio
+
+Output is `out/<job-id>/clip_01.mp4` with title, description and tags — the same **UPLOAD** button works.
+
+### Copyright / monetisation guidance
+
+Recaps are risky. offcut is designed to be *safer*, not strike-proof:
+
+- Prefer **short** supporting clips (we cap each at 2–6 seconds)
+- Keep the **voiceover as original commentary / analysis / opinion**, not a plot readout
+- Leave **endings out** unless you intentionally enable spoilers
+- YouTube **Content ID** can still claim or mute videos that use film footage, even with commentary
+- Public-domain films (e.g. many pre-1929 works on archive.org) are the lowest-risk sources
+- This is not legal advice — check YouTube's fair-use guidance and your local copyright law
 
 ## Channel watch
 
@@ -68,6 +93,17 @@ appends `#Shorts` to the title and uses the generated description + tags.
    - Application type: **Desktop app**
    - Download the JSON and save it as `client_secret.json` in the offcut folder
      (same directory as `run.sh`). The file is gitignored.
+
+
+Direct links:
+
+| Step | Link |
+|------|------|
+| Cloud Console home | https://console.cloud.google.com/ |
+| Enable YouTube Data API v3 | https://console.cloud.google.com/apis/library/youtube.googleapis.com |
+| OAuth consent screen | https://console.cloud.google.com/apis/credentials/consent |
+| Create OAuth Desktop client | https://console.cloud.google.com/apis/credentials |
+| AI Studio Gemini key (for recap scripts) | https://aistudio.google.com/apikey |
 
 ### 2. Connect
 
@@ -124,6 +160,7 @@ DIRECT      OpenCV Haar face detection every 0.5s, smoothed with a dead-zone →
 RENDER      ffmpeg crop → 1080x1920, ASS captions with a scale pop on the active word
 WATCH       channel RSS every N min → new video ids → Job
 UPLOAD      OAuth → videos.insert (private Short)
+RECAP       upload → scenes + Gemini commentary → edge-tts → ffmpeg assemble
 ```
 
 Progress is streamed to the browser over SSE (`/api/jobs/<id>/events`).
@@ -138,6 +175,7 @@ offcut/
   pipeline.py        the job
   watch.py           channel poller + data/watch.json
   youtube_upload.py  OAuth + Shorts upload
+  recap.py           commentary recap job
   server.py          FastAPI + SSE
 web/                 plain HTML/CSS/JS, no build step
 data/                watch.json + youtube_token.json (gitignored)

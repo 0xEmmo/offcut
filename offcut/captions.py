@@ -2,19 +2,25 @@
 import re
 from .brain import EMPH
 
-HEAD = """[Script Info]
+WHITE, YELLOW = "&H00FFFFFF&", "&H0000E5FF&"
+
+
+def _head(play_w=1080, play_h=1920):
+    # larger margin on vertical; lower third on landscape
+    margin_v = 560 if play_h >= play_w else 120
+    size = 128 if play_h >= play_w else 72
+    return f"""[Script Info]
 ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
+PlayResX: {play_w}
+PlayResY: {play_h}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,DejaVu Sans,128,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,3,2,60,60,560,1
+Style: Cap,DejaVu Sans,{size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,3,2,60,60,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
-WHITE, YELLOW = "&H00FFFFFF&", "&H0000E5FF&"
 
 
 def ts(t):
@@ -32,8 +38,8 @@ def chunks(words, size=3):
         yield words[i:i + size]
 
 
-def build_ass(words):
-    out = [HEAD]
+def build_ass(words, play_w=1080, play_h=1920):
+    out = [_head(play_w, play_h)]
     idx = 0
     for ch in chunks(words):
         for j, active in enumerate(ch):

@@ -1,10 +1,21 @@
 const $ = s => document.querySelector(s);
-const STEPS = ["INGEST", "TRANSCRIPT", "SCENE", "DIRECT", "RENDER"];
+const CUT_STEPS = ["INGEST", "TRANSCRIPT", "SCENE", "DIRECT", "RENDER"];
 let model = "auto", caps = true, job = null, clips = [], pickIdx = 0;
+let mode = "cut", recapLen = 1, recapFmt = "9:16", recapCaps = true, recapSpoil = false;
+let recapPath = null, recapUploading = false;
 
 const show = id => document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id));
 
 fetch("/api/brains").then(r => r.json()).then(b => $("#brainTag").textContent = `local · brain: ${b.default}`);
+
+// ── Mode tabs ─────────────────────────────────────────────────
+$("#modeTabs").onclick = e => {
+  const t = e.target.closest("[data-mode]"); if (!t) return;
+  mode = t.dataset.mode;
+  $("#modeTabs").querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t));
+  $("#cutPane").hidden = mode !== "cut";
+  $("#recapPane").hidden = mode !== "recap";
+};
 
 $("#models").onclick = e => {
   const m = e.target.dataset.m; if (!m) return;
@@ -19,26 +30,95 @@ $("#cutForm").onsubmit = async e => {
   const r = await fetch("/api/cut", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ source, model, captions: caps }) });
   job = (await r.json()).id;
-  startWatchingJob(job, source);
+  startWatchingJob(job, source, CUT_STEPS);
 };
 
-function startWatchingJob(jid, source) {
+// ── Recap ─────────────────────────────────────────────────────
+fetch("/api/recap/options").then(r => r.json()).then(o => {
+  $("#recapVoice").innerHTML = (o.voices || []).map(v =>
+    `<option value="${v.id}">${v.label}</option>`).join("");
+});
+
+$("#recapLen").onclick = e => {
+  const b = e.target.closest("[data-l]"); if (!b) return;
+  recapLen = +b.dataset.l;
+  $("#recapLen").querySelectorAll(".chip").forEach(c => c.classList.toggle("on", c === b));
+};
+$("#recapFmt").onclick = e => {
+  const b = e.target.closest("[data-f]"); if (!b) return;
+  recapFmt = b.dataset.f;
+  $("#recapFmt").querySelectorAll(".chip").forEach(c => c.classList.toggle("on", c === b));
+};
+$("#recapCap").onclick = e => {
+  recapCaps = !recapCaps;
+  e.target.classList.toggle("on", recapCaps);
+  e.target.textContent = recapCaps ? "on" : "off";
+};
+$("#recapSpoil").onclick = e => {
+  recapSpoil = !recapSpoil;
+  e.target.classList.toggle("on", recapSpoil);
+  e.target.textContent = recapSpoil ? "spoil" : "hide";
+};
+
+$("#recapFile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $("#recapName").value = f.name + " · uploading…";
+  recapUploading = true; recapPath = null;
+  const fd = new FormData(); fd.append("file", f);
+  try {
+    const r = await fetch("/api/upload-file", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || "upload failed");
+    recapPath = j.path;
+    $("#recapName").value = f.name;
+  } catch (err) {
+    $("#recapName").value = "";
+    alert(err.message || err);
+  } finally { recapUploading = false; }
+};
+
+$("#recapForm").onsubmit = async e => {
+  e.preventDefault();
+  if (recapUploading) { alert("Still uploading…"); return; }
+  if (!recapPath) { alert("Upload a movie file first."); return; }
+  const btn = $("#recapGo"); btn.disabled = true; btn.textContent = "…";
+  try {
+    const r = await fetch("/api/recap", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: recapPath, length: recapLen, fmt: recapFmt,
+        voice: $("#recapVoice").value, spoilers: recapSpoil, captions: recapCaps,
+      }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || "recap failed");
+    startWatchingJob(j.id, $("#recapName").value || "recap", null);
+  } catch (err) { alert(err.message || err); }
+  finally { btn.disabled = false; btn.textContent = "RECAP IT"; }
+};
+
+function startWatchingJob(jid, source, steps) {
   job = jid;
   $("#procSrc").textContent = source || jid;
-  $("#steps").innerHTML = STEPS.map(s => `<li data-s="${s}"><span class="mono">${s}</span><span class="bar"><i></i></span><span class="mono dim">0%</span></li>`).join("");
+  const initial = steps || CUT_STEPS;
+  $("#steps").innerHTML = initial.map(s => `<li data-s="${s}"><span class="mono">${s}</span><span class="bar"><i></i></span><span class="mono dim">0%</span></li>`).join("");
   show("processing");
+  let stepped = !!steps;
   const es = new EventSource(`/api/jobs/${jid}/events`);
   es.onmessage = ev => {
     const st = JSON.parse(ev.data);
-    for (const s of STEPS) {
-      const li = $(`#steps [data-s=${s}]`), p = st.progress[s];
-      if (!li) continue;
+    if (!stepped && st.steps && st.steps.length) {
+      $("#steps").innerHTML = st.steps.map(s => `<li data-s="${s}"><span class="mono">${s}</span><span class="bar"><i></i></span><span class="mono dim">0%</span></li>`).join("");
+      stepped = true;
+    }
+    const keys = st.steps || Object.keys(st.progress || {});
+    for (const s of keys) {
+      const li = document.querySelector(`#steps [data-s="${s}"]`), p = st.progress[s];
+      if (!li || p == null) continue;
       li.querySelector("i").style.width = p * 100 + "%";
       li.lastChild.textContent = Math.round(p * 100) + "%";
       li.classList.toggle("done", p >= 1);
     }
     $("#log").textContent = st.log.join("\n") + (st.error ? `\n\nerror: ${st.error}` : "");
-    if (st.status === "done") { es.close(); results(st.clips); }
+    if (st.status === "done") { es.close(); results(st.clips, st.fmt); }
     if (st.status !== "running") es.close();
   };
 }
@@ -49,12 +129,14 @@ $("#cancelJob").onclick = async () => {
   $("#log").textContent += "\n\ncancelling…";
 };
 
-function results(list) {
+function results(list, fmt) {
   clips = list;
-  $("#strip").innerHTML = list.map((c, i) => `<div class="card" data-i="${i}"><img src="${c.thumb}" alt=""><div><b>${c.score}</b><span>${fmt(c.duration)}</span></div></div>`).join("");
+  $("#strip").innerHTML = list.map((c, i) => `<div class="card" data-i="${i}"><img src="${c.thumb}" alt=""><div><b>${c.score}</b><span>${fmtDur(c.duration)}</span></div></div>`).join("");
   $("#strip").onclick = e => { const c = e.target.closest(".card"); if (c) pick(+c.dataset.i); };
   $("#dlAll").href = `/api/jobs/${job}/zip`;
   $("#uploadMsg").textContent = "";
+  const ratio = (fmt || (list[0] && list[0].fmt) || "9:16");
+  $("#player").style.aspectRatio = ratio === "16:9" ? "16/9" : "9/16";
   show("results"); pick(0);
 }
 
@@ -64,13 +146,13 @@ function pick(i) {
   document.querySelectorAll(".card").forEach((el, j) => el.classList.toggle("on", i === j));
   $("#player").src = c.mp4; $("#dlMp4").href = c.mp4; $("#dlSrt").href = c.srt;
   $("#score").textContent = c.score; $("#why").textContent = c.why;
-  $("#bars").innerHTML = Object.entries(c.sub).map(([k, v]) => `<div class="sb"><span class="dim">${k.toUpperCase()}</span><span class="bar"><i style="width:${v * 10}%"></i></span><span>${v}</span></div>`).join("");
+  $("#bars").innerHTML = Object.entries(c.sub || {}).map(([k, v]) => `<div class="sb"><span class="dim">${k.toUpperCase()}</span><span class="bar"><i style="width:${v * 10}%"></i></span><span>${v}</span></div>`).join("");
   document.querySelectorAll(".copy").forEach(el => {
     const v = c[el.dataset.k]; el.querySelector("p").textContent = Array.isArray(v) ? v.join(" ") : v;
     el.querySelector("button").onclick = () => { navigator.clipboard.writeText(el.querySelector("p").textContent); el.querySelector("button").textContent = "COPIED"; setTimeout(() => el.querySelector("button").textContent = "COPY", 1200); };
   });
 }
-const fmt = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+const fmtDur = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 $("#again").onclick = () => show("input");
 
 $("#uploadBtn").onclick = async () => {
@@ -191,18 +273,12 @@ $("#watchList").onclick = async e => {
 $("#autoJobs").onclick = async e => {
   const open = e.target.closest("[data-open]");
   if (!open) return;
-  // reopen a finished job from disk via its events (may 404 if server restarted — fall back to files)
   const jid = open.dataset.open;
-  const r = await fetch(`/api/jobs/${jid}/events`);
-  if (r.ok) {
-    // SSE won't replay finished jobs registered after restart; try zip listing via job.json
-  }
-  // load job.json from files
   const jr = await fetch(`/files/${jid}/job.json`);
   if (!jr.ok) { alert("job gone from memory — open files in out/" + jid); return; }
   const st = await jr.json();
   job = jid;
-  results(st.clips || []);
+  results(st.clips || [], st.fmt);
 };
 
 $("#pollMins").onchange = async () => {
@@ -218,7 +294,7 @@ $("#pollNow").onclick = async () => {
   if (j.started?.length) {
     const first = j.started[0];
     if (confirm(`Started ${j.started.length} job(s). Open ${first.title}?`)) {
-      startWatchingJob(first.job_id, first.title);
+      startWatchingJob(first.job_id, first.title, CUT_STEPS);
     }
   } else {
     alert("No new uploads.");
