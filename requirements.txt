@@ -5,3 +5,6 @@ opencv-python-headless>=4.9,<5
 yt-dlp
 httpx
 numpy
+google-api-python-client>=2.100
+google-auth-oauthlib>=1.2
+google-auth-httplib2>=0.2

@@ -1,16 +1,30 @@
 import asyncio, json, threading, zipfile, io
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .pipeline import Job, OUT
-from . import brain
+from . import brain, watch, youtube_upload as yt
 
-app = FastAPI(title="offcut")
 JOBS: dict[str, Job] = {}
 WEB = Path(__file__).resolve().parent.parent / "web"
 OUT.mkdir(exist_ok=True)
+
+
+def _register(job: Job):
+    JOBS[job.id] = job
+
+
+@asynccontextmanager
+async def lifespan(app):
+    watch.start_poller(_register)
+    yield
+    watch.stop_poller()
+
+
+app = FastAPI(title="offcut", lifespan=lifespan)
 
 
 class CutReq(BaseModel):
@@ -18,6 +32,25 @@ class CutReq(BaseModel):
     model: str = "auto"
     captions: bool = True
     count: int = 4
+
+
+class WatchAdd(BaseModel):
+    url: str
+    auto_upload: bool = False
+
+
+class WatchToggle(BaseModel):
+    auto_upload: bool
+
+
+class PollMins(BaseModel):
+    minutes: int
+
+
+class UploadReq(BaseModel):
+    job_id: str
+    clip: str  # e.g. clip_01
+    privacy: str = "private"
 
 
 @app.get("/api/brains")
@@ -33,10 +66,20 @@ def cut(req: CutReq):
     return {"id": job.id}
 
 
+@app.post("/api/jobs/{jid}/cancel")
+def cancel(jid: str):
+    job = JOBS.get(jid)
+    if not job:
+        raise HTTPException(404)
+    job.cancel()
+    return {"ok": True, "status": job.status}
+
+
 @app.get("/api/jobs/{jid}/events")
 async def events(jid: str):
-    job = JOBS.get(jid) or HTTPException(404)
-    if isinstance(job, HTTPException): raise job
+    job = JOBS.get(jid)
+    if not job:
+        raise HTTPException(404)
     async def gen():
         last = None
         while True:
@@ -59,6 +102,98 @@ def zip_all(jid: str):
     buf.seek(0)
     return StreamingResponse(buf, media_type="application/zip",
                              headers={"Content-Disposition": f"attachment; filename=offcut-{jid}.zip"})
+
+
+# ── Channel watch ──────────────────────────────────────────────
+
+@app.get("/api/watch")
+def watch_status():
+    return watch.status()
+
+
+@app.post("/api/watch")
+def watch_add(req: WatchAdd):
+    try:
+        ch = watch.add_channel(req.url, auto_upload=req.auto_upload)
+        return {"ok": True, "channel": ch}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/watch/{channel_id}")
+def watch_del(channel_id: str):
+    watch.remove_channel(channel_id)
+    return {"ok": True}
+
+
+@app.patch("/api/watch/{channel_id}")
+def watch_patch(channel_id: str, req: WatchToggle):
+    try:
+        watch.set_auto_upload(channel_id, req.auto_upload)
+        return {"ok": True}
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.put("/api/watch/poll")
+def watch_poll(req: PollMins):
+    watch.set_poll_minutes(req.minutes)
+    return {"ok": True, "poll_minutes": watch.load()["poll_minutes"]}
+
+
+@app.post("/api/watch/poll-now")
+def watch_poll_now():
+    started = watch.poll_once(_register)
+    return {"ok": True, "started": started}
+
+
+# ── YouTube upload ─────────────────────────────────────────────
+
+@app.get("/api/youtube")
+def youtube_status():
+    return yt.status()
+
+
+@app.post("/api/youtube/connect")
+def youtube_connect():
+    try:
+        return yt.start_oauth()
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/youtube/disconnect")
+def youtube_disconnect():
+    yt.disconnect()
+    return {"ok": True}
+
+
+@app.post("/api/upload")
+def upload(req: UploadReq):
+    job = JOBS.get(req.job_id)
+    clip_meta = None
+    if job:
+        clip_meta = next((c for c in job.clips if c["name"] == req.clip), None)
+        mp4 = job.dir / f"{req.clip}.mp4"
+    else:
+        # fall back to on-disk job.json for finished jobs after restart
+        d = OUT / req.job_id
+        mp4 = d / f"{req.clip}.mp4"
+        jj = d / "job.json"
+        if jj.exists():
+            data = json.loads(jj.read_text())
+            clip_meta = next((c for c in data.get("clips", []) if c["name"] == req.clip), None)
+    if not mp4.exists():
+        raise HTTPException(404, "clip not found")
+    if not clip_meta:
+        clip_meta = {"name": req.clip, "title": req.clip, "description": "", "hashtags": []}
+    try:
+        result = yt.upload_clip(mp4, clip_meta, privacy=req.privacy)
+        return {"ok": True, **result}
+    except Exception as e:
+        raise HTTPException(400, str(e))
 
 
 app.mount("/files", StaticFiles(directory=OUT), name="files")

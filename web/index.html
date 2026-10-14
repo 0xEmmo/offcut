@@ -2,7 +2,13 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>offcut</title><link rel="stylesheet" href="style.css"></head>
 <body>
-<header><span class="logo">offcut<b>.</b></span><span class="mono dim" id="brainTag">local · v0.1</span></header>
+<header>
+  <span class="logo">offcut<b>.</b></span>
+  <div class="hdr-right">
+    <button type="button" class="btn ghost mono" id="ytBtn">CONNECT YOUTUBE</button>
+    <span class="mono dim" id="brainTag">local · v0.2</span>
+  </div>
+</header>
 
 <section id="input" class="screen on">
   <p class="mono dim">01 / SOURCE</p>
@@ -27,6 +33,22 @@
       <button type="button" id="capToggle" class="chip on">on</button>
     </div>
   </form>
+
+  <div class="watch" id="watchPanel">
+    <p class="mono dim">WATCH</p>
+    <p class="note mono dim" style="margin:0 0 12px">Auto-clip new uploads from YouTube channels. Poll every <input id="pollMins" type="number" min="5" max="1440" value="30" class="mini"> min. <button type="button" class="btn ghost mono" id="pollNow">POLL NOW</button></p>
+    <form id="watchForm" class="field">
+      <input id="watchUrl" placeholder="@handle or youtube.com/@channel" autocomplete="off" required>
+      <label class="chip" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="watchAutoUp" style="accent-color:var(--hot)"> auto-upload
+      </label>
+      <button class="btn hot mono" type="submit">ADD</button>
+    </form>
+    <ul id="watchList" class="watch-list"></ul>
+    <p class="mono dim" style="margin-top:18px">RECENT AUTO-JOBS</p>
+    <ul id="autoJobs" class="watch-list dim"></ul>
+  </div>
+
   <p class="note mono dim">BROWSE can't read full paths from a browser — it fills the file name; paste the absolute path if it lives elsewhere.</p>
 </section>
 
@@ -35,6 +57,7 @@
   <h2 id="procSrc" class="mono"></h2>
   <ol id="steps"></ol>
   <pre id="log" class="mono dim"></pre>
+  <button type="button" class="btn ghost mono" id="cancelJob" style="margin-top:16px">CANCEL</button>
 </section>
 
 <section id="results" class="screen">
@@ -46,7 +69,9 @@
         <a class="btn hot mono" id="dlMp4" download>EXPORT MP4</a>
         <a class="btn ghost mono" id="dlAll">EXPORT ALL</a>
         <a class="btn ghost mono" id="dlSrt" download>EXPORT SRT</a>
+        <button type="button" class="btn ghost mono" id="uploadBtn">UPLOAD</button>
       </div>
+      <p class="mono dim" id="uploadMsg" style="margin-top:8px"></p>
     </div>
     <div class="right">
       <p class="mono dim">AUDIT</p>

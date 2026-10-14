@@ -36,3 +36,12 @@ video{width:100%;aspect-ratio:9/16;background:#000;border-radius:6px}.btns{displ
 .copy p{margin:4px 60px 0 0}.copy button{position:absolute;top:10px;right:10px;background:none;border:1px solid var(--line);color:var(--fg);padding:4px 8px;border-radius:3px;cursor:pointer}
 #again{margin-top:20px}
 @media(max-width:800px){.split{grid-template-columns:1fr}}
+.hdr-right{display:flex;align-items:center;gap:16px}
+#ytBtn.on{border-color:var(--gold);color:var(--gold)}
+.watch{margin-top:48px;padding-top:32px;border-top:1px solid var(--line);max-width:720px}
+.watch-list{list-style:none;padding:0;margin:12px 0 0}
+.watch-list li{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.watch-list li > div{flex:1;min-width:160px}
+.watch-list b{display:block}
+.mini{width:56px;background:var(--panel);border:1px solid var(--line);color:var(--fg);padding:4px 6px;border-radius:3px;font:12px var(--mono)}
+#uploadBtn:disabled{opacity:.5;cursor:wait}

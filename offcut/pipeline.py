@@ -13,6 +13,14 @@ class Job:
         self.dir = OUT / self.id
         self.progress = {s: 0.0 for s in STEPS}
         self.status, self.error, self.clips, self.log = "running", None, [], []
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
+    def _check(self):
+        if self._cancel:
+            raise RuntimeError("cancelled")
 
     def set(self, step, p, msg=None):
         self.progress[step] = round(p, 3)
@@ -26,7 +34,10 @@ class Job:
         try:
             self._run(); self.status = "done"
         except Exception as e:
-            self.status, self.error = "error", str(e)
+            if self._cancel or str(e) == "cancelled":
+                self.status, self.error = "cancelled", "cancelled"
+            else:
+                self.status, self.error = "error", str(e)
         (self.dir / "job.json").write_text(json.dumps(self.state(), indent=2)) if self.dir.exists() else None
 
     def _run(self):
@@ -34,23 +45,30 @@ class Job:
         src = ingest.ingest(self.source, self.dir)
         meta = ingest.probe(src)
         self.set("INGEST", 1, f"{meta['w']}x{meta['h']}, {meta['duration']:.0f}s")
+        self._check()
 
-        words = transcribe.transcribe(src, lambda p: self.set("TRANSCRIPT", p))
+        def _prog(p):
+            self._check(); self.set("TRANSCRIPT", p)
+        words = transcribe.transcribe(src, _prog)
         (self.dir / "words.json").write_text(json.dumps(words))
         self.set("TRANSCRIPT", 1, f"{len(words)} words")
+        self._check()
 
         self.set("SCENE", 0.3, "scoring windows")
         used, picks = brain.pick(words, meta["duration"], self.model, self.n)
         self.set("SCENE", 1, f"{len(picks)} moments via {used}")
+        self._check()
 
         crop_w = min(meta["w"], int(meta["h"] * 9 / 16)) // 2 * 2
         tracks = []
         for i, c in enumerate(picks):
+            self._check()
             tr = reframe.face_track(src, float(c["start"]), float(c["end"]), meta["w"], meta["h"])
             tracks.append(tr)
             self.set("DIRECT", (i + 1) / len(picks), f"clip {i+1}: {'face track' if tr else 'centre crop'}")
 
         for i, (c, tr) in enumerate(zip(picks, tracks)):
+            self._check()
             s, e = float(c["start"]), float(c["end"])
             cw = [{"w": w["w"], "s": w["s"] - s, "e": w["e"] - s} for w in words if s <= w["s"] < e]
             name = f"clip_{i+1:02d}"
