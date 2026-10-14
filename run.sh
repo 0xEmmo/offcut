@@ -5,5 +5,6 @@ cd "$(dirname "$0")"
 command -v ffmpeg >/dev/null || { echo "offcut needs ffmpeg on PATH (brew/apt install ffmpeg)"; exit 1; }
 [ -d .venv ] || python3 -m venv .venv
 . .venv/bin/activate
+[ -f .env ] && { set -a; . ./.env; set +a; }
 [ -f .venv/.ok ] || { pip install -q -r requirements.txt && touch .venv/.ok; }
 exec python -m offcut "$@"

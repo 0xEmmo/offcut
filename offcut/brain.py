@@ -31,7 +31,7 @@ def _ask(brain: str, prompt: str) -> str:
                   "messages": [{"role": "user", "content": prompt}]})
         return r.raise_for_status().json()["content"][0]["text"]
     if brain == "gemini":
-        m = os.getenv("OFFCUT_GEMINI_MODEL", "gemini-2.5-flash")
+        m = os.getenv("OFFCUT_GEMINI_MODEL", "gemini-flash-latest")
         r = httpx.post(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
                        params={"key": os.environ["GEMINI_API_KEY"]}, timeout=120,
                        json={"contents": [{"parts": [{"text": prompt}]}]})
