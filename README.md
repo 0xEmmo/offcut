@@ -189,3 +189,15 @@ data/                watch.json + youtube_token.json (gitignored)
 - BROWSE fills in the file name only, because browsers hide real paths. Paste the absolute path for files outside the working directory.
 - YouTube sometimes asks yt-dlp to prove it isn't a bot. offcut retries three times, but if YouTube keeps asking you'll need cookies (`yt-dlp --cookies-from-browser`). Having Node installed helps yt-dlp.
 - OAuth needs a real browser on the machine running offcut (installed-app flow). Headless servers need a different auth path.
+
+## DOCUMENTARY mode
+
+Paste a topic (a true-crime case, a mystery or a historical event) and offcut makes a faceless documentary package:
+
+- **Script:** one Gemini call per topic (`gemini-flash-latest`) returns the long script, 2 Short scripts, the title, description, tags, hashtags and image search queries as JSON. If the quota is used up you get a clear error, and you can paste your own script JSON instead, which skips Gemini.
+- **Images:** public-domain, CC0 and CC BY/BY-SA stills from Wikimedia Commons only. Credits are added to every description. No film or TV footage.
+- **Voice:** edge-tts Andrew voiceover, burned-in Anton captions, Ken Burns motion and an on-screen hook for the first 3 seconds.
+- **Output:** a long video (3, 6 or 10 minutes, 16:9), 2 Shorts (9:16) and a 1280x720 thumbnail plus metadata `.txt` for each, saved in `out/docu-*/`.
+- **Upload:** an UPLOAD PRIVATE button per video. It also tries to set the custom thumbnail, which needs a channel with that feature enabled.
+
+API: `POST /api/docu {topic, minutes, script?}`, `GET /api/docu/{id}`, `POST /api/docu/{id}/upload {name, privacy}`.

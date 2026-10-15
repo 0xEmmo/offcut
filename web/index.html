@@ -14,6 +14,7 @@
   <div class="tabs" id="modeTabs">
     <button type="button" class="tab on" data-mode="cut">CUT</button>
     <button type="button" class="tab" data-mode="recap">RECAP</button>
+    <button type="button" class="tab" data-mode="docu">DOCUMENTARY</button>
   </div>
 
   <div id="cutPane">
@@ -92,6 +93,36 @@
     </form>
     <p class="note mono dim">Uploads go to this machine (<code>data/uploads/</code>). Recaps use short clips + your own voiceover commentary — safer for monetisation than a full plot dump, but Content ID claims are still possible. See README.</p>
   </div>
+
+  <div id="docuPane" hidden>
+    <p class="mono dim">01 / DOCUMENTARY</p>
+    <h1>Paste a topic.<br><em>Documentary out.</em></h1>
+    <form id="docuForm">
+      <div class="field">
+        <input id="docuTopic" placeholder="e.g. The disappearance of the Mary Celeste" autocomplete="off" required>
+        <button class="btn hot mono" type="submit" id="docuGo">MAKE IT</button>
+      </div>
+      <div class="row">
+        <span class="mono dim">LONG VIDEO</span>
+        <div class="chips" id="docuLen">
+          <button type="button" data-l="3" class="chip">3m</button>
+          <button type="button" data-l="6" class="chip">6m</button>
+          <button type="button" data-l="10" class="chip on">10m</button>
+        </div>
+        <span class="mono dim gap">+ 2 SHORTS · 9:16</span>
+      </div>
+      <details class="mono dim" style="margin-top:10px"><summary>Paste my own script JSON (skips Gemini)</summary>
+        <textarea id="docuScript" rows="6" style="width:100%;margin-top:8px;background:transparent;color:inherit;border:1px solid #333;font:inherit"></textarea>
+      </details>
+    </form>
+    <div id="docuProg" hidden>
+      <p class="mono dim" style="margin-top:20px">PROGRESS</p>
+      <ol id="docuSteps" class="mono"></ol>
+      <pre id="docuLog" class="mono dim"></pre>
+    </div>
+    <div id="docuOut"></div>
+    <p class="note mono dim">One Gemini call per topic. Images come only from Wikimedia Commons (public domain / CC0 / CC BY), with credits added to each description. No film or TV footage. Uploads are PRIVATE.</p>
+  </div>
 </section>
 
 <section id="processing" class="screen">
@@ -129,4 +160,5 @@
   </div>
 </section>
 <script src="app.js"></script>
+<script src="docu.js"></script>
 </body></html>

@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .pipeline import Job, OUT
 from .recap import RecapJob, UPLOADS, VOICES, LENGTH_TARGETS
-from . import brain, watch, youtube_upload as yt
+from . import brain, watch, youtube_upload as yt, docu
 
 JOBS: dict[str, object] = {}
 
@@ -250,6 +250,47 @@ def upload(req: UploadReq):
     try:
         result = yt.upload_clip(mp4, clip_meta, privacy=req.privacy)
         return {"ok": True, **result}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+# ── Documentary mode ───────────────────────────────────────────
+class DocuReq(BaseModel):
+    topic: str
+    minutes: float = 10
+    script: dict | None = None
+
+
+class DocuUp(BaseModel):
+    name: str
+    privacy: str = "private"
+
+
+@app.post("/api/docu")
+def docu_start(req: DocuReq):
+    if not req.topic.strip():
+        raise HTTPException(400, "topic required")
+    job = docu.DocuJob(req.topic, minutes=max(1, min(15, req.minutes)), script=req.script)
+    JOBS[job.id] = job
+    threading.Thread(target=job.run, daemon=True).start()
+    return {"id": job.id}
+
+
+@app.get("/api/docu/{jid}")
+def docu_state(jid: str):
+    job = JOBS.get(jid)
+    if job: return job.state()
+    jj = OUT / jid / "job.json"
+    if jj.exists(): return json.loads(jj.read_text())
+    raise HTTPException(404)
+
+
+@app.post("/api/docu/{jid}/upload")
+def docu_upload(jid: str, req: DocuUp):
+    d = OUT / jid
+    if not (d / "job.json").exists(): raise HTTPException(404, "job not finished")
+    try:
+        return {"ok": True, **docu.upload(d, req.name, req.privacy)}
     except Exception as e:
         raise HTTPException(400, str(e))
 

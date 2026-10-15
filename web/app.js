@@ -15,6 +15,7 @@ $("#modeTabs").onclick = e => {
   $("#modeTabs").querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t));
   $("#cutPane").hidden = mode !== "cut";
   $("#recapPane").hidden = mode !== "recap";
+  $("#docuPane").hidden = mode !== "docu";
 };
 
 $("#models").onclick = e => {
